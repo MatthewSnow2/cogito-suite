@@ -86,7 +86,7 @@ const EditGPT = () => {
     try {
       const { data, error } = await supabase
         .from('knowledge_base')
-        .select('*')
+        .select('id, file_name, file_size, upload_path, created_at, processed_at')
         .eq('custom_gpt_id', id)
         .order('created_at', { ascending: false });
 

@@ -10,6 +10,7 @@ import Dashboard from "./pages/Dashboard";
 import CreateGPT from "./pages/CreateGPT";
 import EditGPT from "./pages/EditGPT";
 import Chat from "./pages/Chat";
+import TestReset from "./pages/TestReset";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -87,6 +88,11 @@ const App = () => (
             <Route path="/chat" element={
               <ProtectedRoute>
                 <Chat />
+              </ProtectedRoute>
+            } />
+            <Route path="/test-reset" element={
+              <ProtectedRoute>
+                <TestReset />
               </ProtectedRoute>
             } />
             <Route path="*" element={<NotFound />} />

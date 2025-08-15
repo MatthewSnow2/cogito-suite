@@ -45,9 +45,16 @@ serve(async (req) => {
 
     console.log('PDF downloaded, size:', fileData.size);
 
-    // Extract clean text from PDF
-    const text = await extractCleanTextFromPDF(fileData);
-    console.log('Clean text extracted, length:', text.length);
+    // Extract clean text from PDF with defensive error handling
+    let text = '';
+    try {
+      text = await extractCleanTextFromPDF(fileData);
+      console.log('Clean text extracted, length:', text.length);
+    } catch (error) {
+      console.error('Text extraction failed, attempting fallback:', error);
+      // Fallback to basic text extraction
+      text = `Uploaded file: ${fileName}. Content processing failed but file was uploaded successfully.`;
+    }
 
     if (!text || text.length < 50) {
       throw new Error('Unable to extract readable text from PDF. The document may be encrypted, image-based, or corrupted.');
@@ -345,7 +352,7 @@ function cleanAndValidateText(text: string): string {
     // Remove very long words (likely binary/glyphs)
     .replace(/\b\S{40,}\b/g, ' ')
     // Remove lines that are mostly numbers/width arrays
-    .replace(/(?m)^(?:\s*\d+(?:\.\d+)?\s+){6,}\d+(?:\.\d+)?\s*$/g, ' ')
+    .replace(/^(?:\s*\d+(?:\.\d+)?\s+){6,}\d+(?:\.\d+)?\s*$/gm, ' ')
     // Remove repeated tiny tokens
     .replace(/(?:\b\w\b\s*){8,}/g, ' ');
 

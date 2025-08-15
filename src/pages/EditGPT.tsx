@@ -159,23 +159,34 @@ const EditGPT = () => {
       const fileName = `${Date.now()}_${file.name}`;
       const filePath = `knowledge/${id}/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from('documents')
-        .upload(filePath, file);
+        .upload(filePath, file, {
+          contentType: 'application/pdf',
+          upsert: true,
+        });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('Storage upload error:', uploadError);
+        throw new Error(`Storage upload failed: ${uploadError.message}`);
+      }
 
       // Save file record to database
-      const { error: dbError } = await supabase
+      const { data: kbRow, error: dbError } = await supabase
         .from('knowledge_base')
         .insert({
           custom_gpt_id: id,
           file_name: file.name,
           file_size: file.size,
           upload_path: filePath,
-        });
+        })
+        .select()
+        .single();
 
-      if (dbError) throw dbError;
+      if (dbError) {
+        console.error('DB insert error (knowledge_base):', dbError);
+        throw new Error(`Database insert failed: ${dbError.message}`);
+      }
 
       toast({
         title: "Success!",

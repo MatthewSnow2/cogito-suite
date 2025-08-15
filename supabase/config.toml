@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.purge-vectors]
 verify_jwt = false
+
+[functions.reset-knowledge]
+verify_jwt = false

@@ -51,8 +51,38 @@ serve(async (req) => {
       throw new Error('Unable to extract readable text from PDF. The document may be encrypted, image-based, or corrupted.');
     }
 
-    // Split text into meaningful chunks
-    const chunks = createMeaningfulChunks(text);
+    // Distill core human-readable text with LLM to remove PDF metadata/junk
+    let distilled = text;
+    try {
+      const trimmed = text.length > 12000 ? text.slice(0, 12000) : text;
+      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAIApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4.1-2025-04-14',
+          messages: [
+            { role: 'system', content: 'Extract only the human-readable body text from an email/newsletter saved as PDF. Remove fonts, object refs, hex, coordinates, and metadata. Return clean paragraphs only. No commentary.' },
+            { role: 'user', content: `File: ${fileName}\n---\n${trimmed}`}
+          ],
+          max_completion_tokens: 1200,
+        }),
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const distilledText = data.choices?.[0]?.message?.content?.trim();
+        if (distilledText && distilledText.length > 200) distilled = distilledText;
+      } else {
+        console.warn('LLM distillation skipped due to API error');
+      }
+    } catch (e) {
+      console.warn('LLM distillation failed, using raw text');
+    }
+
+    // Split distilled text into meaningful chunks
+    const chunks = createMeaningfulChunks(distilled);
     console.log('Text split into', chunks.length, 'meaningful chunks');
 
     // Generate embeddings for each chunk

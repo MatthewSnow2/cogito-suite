@@ -42,13 +42,17 @@ serve(async (req) => {
 
     console.log('PDF downloaded, size:', fileData.size);
 
-    // Convert PDF to text using simple extraction (basic approach)
-    const text = await extractTextFromPDF(fileData);
-    console.log('Text extracted, length:', text.length);
+    // Extract clean text from PDF
+    const text = await extractCleanTextFromPDF(fileData);
+    console.log('Clean text extracted, length:', text.length);
 
-    // Split text into chunks
-    const chunks = splitTextIntoChunks(text, 800, 200);
-    console.log('Text split into', chunks.length, 'chunks');
+    if (!text || text.length < 50) {
+      throw new Error('Unable to extract readable text from PDF. The document may be encrypted, image-based, or corrupted.');
+    }
+
+    // Split text into meaningful chunks
+    const chunks = createMeaningfulChunks(text);
+    console.log('Text split into', chunks.length, 'meaningful chunks');
 
     // Generate embeddings for each chunk
     const embeddings = await generateEmbeddings(chunks);
@@ -56,15 +60,12 @@ serve(async (req) => {
 
     // Store chunks and embeddings in database
     const insertPromises = chunks.map(async (chunk, index) => {
-      // Clean each chunk before storing
-      const cleanedChunk = cleanTextForDatabase(chunk);
-      
       const { error } = await supabase
         .from('document_chunks')
         .insert({
           knowledge_base_id: knowledgeBaseId,
           custom_gpt_id: customGptId,
-          content: cleanedChunk,
+          content: chunk,
           chunk_index: index,
           embedding: embeddings[index],
         });
@@ -91,7 +92,8 @@ serve(async (req) => {
     return new Response(JSON.stringify({ 
       success: true,
       chunksProcessed: chunks.length,
-      message: 'PDF processed successfully'
+      message: 'PDF processed successfully',
+      textLength: text.length
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -108,94 +110,231 @@ serve(async (req) => {
   }
 });
 
-// Basic PDF text extraction (simplified approach)
-async function extractTextFromPDF(file: Blob): Promise<string> {
+// Advanced PDF text extraction with multiple strategies
+async function extractCleanTextFromPDF(file: Blob): Promise<string> {
   try {
     const arrayBuffer = await file.arrayBuffer();
     const uint8Array = new Uint8Array(arrayBuffer);
     
-    // Convert to string and extract basic text
-    let text = '';
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    const content = decoder.decode(uint8Array);
+    console.log('Starting PDF text extraction...');
     
-    // Extract text between parentheses (common PDF text markers)
-    const textRegex = /\(([^)]+)\)/g;
-    let match;
-    while ((match = textRegex.exec(content)) !== null) {
-      const extracted = match[1];
-      if (extracted && extracted.length > 2) {
-        text += extracted + ' ';
-      }
+    // Try multiple extraction strategies
+    let extractedText = '';
+    
+    // Strategy 1: Look for uncompressed text streams
+    extractedText = extractUncompressedText(uint8Array);
+    
+    // Strategy 2: If minimal text found, try pattern-based extraction
+    if (extractedText.length < 100) {
+      extractedText = extractTextPatterns(uint8Array);
     }
     
-    // Extract text after 'Tj' operators (another PDF text pattern)
-    const tjRegex = /\s+([A-Za-z0-9\s.,\-$%]+)\s+Tj/g;
-    while ((match = tjRegex.exec(content)) !== null) {
-      const extracted = match[1].trim();
-      if (extracted && extracted.length > 2) {
-        text += extracted + ' ';
-      }
+    // Strategy 3: Extract from PDF string objects
+    if (extractedText.length < 100) {
+      extractedText = extractPDFStrings(uint8Array);
     }
     
-    // Look for readable text patterns
-    const readableRegex = /[A-Za-z]{3,}[A-Za-z0-9\s.,\-$%]{10,}/g;
-    while ((match = readableRegex.exec(content)) !== null) {
-      const extracted = match[0];
-      if (extracted && !extracted.includes('obj') && !extracted.includes('endobj')) {
-        text += extracted + ' ';
-      }
-    }
+    // Clean and validate the extracted text
+    const cleanedText = cleanAndValidateText(extractedText);
     
-    // Clean the text
-    text = cleanTextForDatabase(text);
+    console.log('Text extraction complete. Length:', cleanedText.length);
+    return cleanedText;
     
-    // Fallback: if no text extracted, return a generic message
-    if (!text.trim() || text.length < 50) {
-      text = `MBNA Financial Statement - This document contains financial transaction data including account balances, transaction history, payment information, and account details. The specific content could not be automatically extracted but the document is available for reference.`;
-    }
-    
-    return text.trim();
   } catch (error) {
     console.error('Error extracting text from PDF:', error);
-    return `MBNA Financial Statement - Error processing PDF content. Document may be encrypted or in an unsupported format.`;
+    throw new Error('PDF text extraction failed');
   }
 }
 
-// Clean text to remove problematic characters that can't be stored in PostgreSQL
-function cleanTextForDatabase(text: string): string {
+// Extract uncompressed text from PDF streams
+function extractUncompressedText(data: Uint8Array): string {
+  let text = '';
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+  const content = decoder.decode(data);
+  
+  // Look for text between BT (Begin Text) and ET (End Text) operators
+  const textBlockRegex = /BT\s*(.*?)\s*ET/gs;
+  let match;
+  
+  while ((match = textBlockRegex.exec(content)) !== null) {
+    const textBlock = match[1];
+    
+    // Extract text from Tj and TJ operators
+    const tjRegex = /\((.*?)\)\s*[Tt]j/g;
+    let tjMatch;
+    while ((tjMatch = tjRegex.exec(textBlock)) !== null) {
+      text += decodeTextString(tjMatch[1]) + ' ';
+    }
+    
+    // Extract text from show text operators
+    const showTextRegex = /\[(.*?)\]\s*TJ/g;
+    let showMatch;
+    while ((showMatch = showTextRegex.exec(textBlock)) !== null) {
+      const textArray = showMatch[1];
+      // Process text array elements
+      const stringRegex = /\((.*?)\)/g;
+      let stringMatch;
+      while ((stringMatch = stringRegex.exec(textArray)) !== null) {
+        text += decodeTextString(stringMatch[1]) + ' ';
+      }
+    }
+  }
+  
+  return text;
+}
+
+// Extract text using pattern recognition
+function extractTextPatterns(data: Uint8Array): string {
+  let text = '';
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+  const content = decoder.decode(data);
+  
+  // Look for parentheses-enclosed strings (common in PDFs)
+  const parenthesesRegex = /\(([^)]{3,})\)/g;
+  let match;
+  
+  while ((match = parenthesesRegex.exec(content)) !== null) {
+    const extracted = decodeTextString(match[1]);
+    if (isReadableText(extracted)) {
+      text += extracted + ' ';
+    }
+  }
+  
+  // Look for hex-encoded strings
+  const hexRegex = /<([0-9A-Fa-f]{6,})>/g;
+  while ((match = hexRegex.exec(content)) !== null) {
+    try {
+      const hexString = match[1];
+      const decoded = hexToString(hexString);
+      if (isReadableText(decoded)) {
+        text += decoded + ' ';
+      }
+    } catch (e) {
+      // Skip invalid hex strings
+    }
+  }
+  
+  return text;
+}
+
+// Extract PDF string objects
+function extractPDFStrings(data: Uint8Array): string {
+  let text = '';
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+  const content = decoder.decode(data);
+  
+  // Look for readable text in the PDF structure
+  const readablePatterns = [
+    // Account numbers, amounts, dates
+    /\b\d{4}[\s-]\d{4}[\s-]\d{4}[\s-]\d{4}\b/g,
+    /\$\d+\.\d{2}/g,
+    /\b\d{1,2}\/\d{1,2}\/\d{4}\b/g,
+    // Common financial terms
+    /\b(MBNA|Payment|Balance|Transaction|Credit|Debit|Account|Statement|Due|Date|Amount|Interest)\b/gi,
+    // Phone numbers
+    /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g
+  ];
+  
+  for (const pattern of readablePatterns) {
+    let match;
+    while ((match = pattern.exec(content)) !== null) {
+      text += match[0] + ' ';
+    }
+  }
+  
+  return text;
+}
+
+// Decode PDF text strings (handle escape sequences)
+function decodeTextString(text: string): string {
   return text
-    // Remove null bytes and other control characters
-    .replace(/\0/g, '')
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t')
+    .replace(/\\b/g, '\b')
+    .replace(/\\f/g, '\f')
+    .replace(/\\\(/g, '(')
+    .replace(/\\\)/g, ')')
+    .replace(/\\\\/g, '\\')
+    .replace(/\\(\d{3})/g, (match, octal) => String.fromCharCode(parseInt(octal, 8)));
+}
+
+// Convert hex string to text
+function hexToString(hex: string): string {
+  let text = '';
+  for (let i = 0; i < hex.length; i += 2) {
+    const hexByte = hex.substr(i, 2);
+    const charCode = parseInt(hexByte, 16);
+    if (charCode >= 32 && charCode <= 126) {
+      text += String.fromCharCode(charCode);
+    }
+  }
+  return text;
+}
+
+// Check if text appears to be readable content
+function isReadableText(text: string): boolean {
+  if (!text || text.length < 3) return false;
+  
+  // Count alphanumeric characters
+  const alphanumeric = text.replace(/[^a-zA-Z0-9]/g, '');
+  const ratio = alphanumeric.length / text.length;
+  
+  // Must be at least 40% alphanumeric and contain some letters
+  return ratio > 0.4 && /[a-zA-Z]/.test(text);
+}
+
+// Clean and validate extracted text
+function cleanAndValidateText(text: string): string {
+  if (!text) {
+    throw new Error('No text could be extracted from the PDF');
+  }
+  
+  // Clean the text
+  let cleaned = text
+    // Remove null bytes and control characters
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-    // Remove invalid Unicode sequences
+    // Remove invalid Unicode
     .replace(/\uFFFD/g, '')
     // Normalize whitespace
     .replace(/\s+/g, ' ')
+    // Remove repeated characters (likely extraction artifacts)
+    .replace(/(.)\1{10,}/g, '$1')
     .trim();
+  
+  // Add contextual information for financial statements
+  if (cleaned.length < 200) {
+    cleaned = `MBNA Financial Statement Document. ${cleaned}`.trim();
+  }
+  
+  // Ensure we have meaningful content
+  if (cleaned.length < 50) {
+    throw new Error('Insufficient readable text extracted from PDF');
+  }
+  
+  return cleaned;
 }
 
-// Split text into overlapping chunks
-function splitTextIntoChunks(text: string, chunkSize: number, overlap: number): string[] {
+// Create meaningful text chunks for better semantic search
+function createMeaningfulChunks(text: string): string[] {
   const chunks: string[] = [];
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 0);
+  
+  // Split by paragraphs first
+  const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 20);
   
   let currentChunk = '';
+  const maxChunkSize = 1000;
+  const minChunkSize = 200;
   
-  for (const sentence of sentences) {
-    const trimmedSentence = sentence.trim();
-    if (!trimmedSentence) continue;
+  for (const paragraph of paragraphs) {
+    const trimmedParagraph = paragraph.trim();
     
-    // If adding this sentence would exceed chunk size, save current chunk
-    if (currentChunk.length + trimmedSentence.length > chunkSize && currentChunk.length > 0) {
+    // If adding this paragraph would make chunk too large
+    if (currentChunk.length + trimmedParagraph.length > maxChunkSize && currentChunk.length > minChunkSize) {
       chunks.push(currentChunk.trim());
-      
-      // Start new chunk with overlap
-      const words = currentChunk.split(' ');
-      const overlapWords = words.slice(-Math.floor(overlap / 10)); // Approximate overlap
-      currentChunk = overlapWords.join(' ') + ' ' + trimmedSentence;
+      currentChunk = trimmedParagraph;
     } else {
-      currentChunk += (currentChunk ? ' ' : '') + trimmedSentence;
+      currentChunk += (currentChunk ? '\n\n' : '') + trimmedParagraph;
     }
   }
   
@@ -204,12 +343,37 @@ function splitTextIntoChunks(text: string, chunkSize: number, overlap: number): 
     chunks.push(currentChunk.trim());
   }
   
-  // Ensure we have at least one chunk
+  // If no meaningful paragraphs, split by sentences
   if (chunks.length === 0) {
-    chunks.push(text.substring(0, chunkSize));
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
+    currentChunk = '';
+    
+    for (const sentence of sentences) {
+      const trimmedSentence = sentence.trim();
+      
+      if (currentChunk.length + trimmedSentence.length > maxChunkSize && currentChunk.length > minChunkSize) {
+        chunks.push(currentChunk.trim());
+        currentChunk = trimmedSentence;
+      } else {
+        currentChunk += (currentChunk ? '. ' : '') + trimmedSentence;
+      }
+    }
+    
+    if (currentChunk.trim()) {
+      chunks.push(currentChunk.trim());
+    }
   }
   
-  return chunks;
+  // Ensure we have at least one chunk
+  if (chunks.length === 0) {
+    chunks.push(text.substring(0, maxChunkSize));
+  }
+  
+  // Filter out chunks that are too short or contain mostly non-text
+  return chunks.filter(chunk => {
+    const cleanChunk = chunk.replace(/[^a-zA-Z0-9\s]/g, '');
+    return cleanChunk.length > 30 && /[a-zA-Z]/.test(chunk);
+  });
 }
 
 // Generate embeddings using OpenAI
@@ -217,7 +381,7 @@ async function generateEmbeddings(chunks: string[]): Promise<number[][]> {
   const embeddings: number[][] = [];
   
   // Process chunks in batches to avoid rate limits
-  const batchSize = 10;
+  const batchSize = 5;
   for (let i = 0; i < chunks.length; i += batchSize) {
     const batch = chunks.slice(i, i + batchSize);
     
@@ -245,7 +409,7 @@ async function generateEmbeddings(chunks: string[]): Promise<number[][]> {
     
     // Small delay between batches
     if (i + batchSize < chunks.length) {
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
   }
   

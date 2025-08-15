@@ -1,7 +1,12 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.55.0';
 
+const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,11 +40,27 @@ serve(async (req) => {
       throw new Error('OpenAI API key not configured');
     }
 
+    // Generate embedding for the user's message
+    const queryEmbedding = await generateQueryEmbedding(message);
+    console.log('Generated query embedding');
+
+    // Search for relevant knowledge base content
+    const relevantContent = await searchKnowledgeBase(queryEmbedding, customGptId);
+    console.log('Found relevant content chunks:', relevantContent.length);
+
+    // Build system message with instructions and context
+    let systemMessage = gptInstructions;
+    
+    if (relevantContent.length > 0) {
+      systemMessage += `\n\nRelevant information from your knowledge base:\n${relevantContent.join('\n\n')}`;
+      console.log('Added knowledge base context to system message');
+    }
+
     // Build messages for OpenAI
     const messages: ChatMessage[] = [
       {
         role: 'system',
-        content: gptInstructions
+        content: systemMessage
       },
       {
         role: 'user',
@@ -77,7 +98,8 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({ 
       content: assistantMessage,
-      success: true 
+      success: true,
+      usedKnowledgeBase: relevantContent.length > 0
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -93,3 +115,47 @@ serve(async (req) => {
     });
   }
 });
+
+// Generate embedding for search query
+async function generateQueryEmbedding(text: string): Promise<number[]> {
+  const response = await fetch('https://api.openai.com/v1/embeddings', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${openAIApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'text-embedding-3-small',
+      input: text,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Failed to generate query embedding');
+  }
+
+  const data = await response.json();
+  return data.data[0].embedding;
+}
+
+// Search knowledge base for relevant content
+async function searchKnowledgeBase(queryEmbedding: number[], customGptId: string): Promise<string[]> {
+  try {
+    const { data, error } = await supabase.rpc('match_documents', {
+      query_embedding: queryEmbedding,
+      custom_gpt_id: customGptId,
+      match_threshold: 0.7,
+      match_count: 3
+    });
+
+    if (error) {
+      console.error('Knowledge base search error:', error);
+      return [];
+    }
+
+    return data?.map((chunk: any) => chunk.content) || [];
+  } catch (error) {
+    console.error('Error searching knowledge base:', error);
+    return [];
+  }
+}

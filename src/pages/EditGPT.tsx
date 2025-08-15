@@ -179,7 +179,6 @@ const EditGPT = () => {
           file_name: file.name,
           file_size: file.size,
           upload_path: filePath,
-          processed_at: new Date().toISOString(),
         })
         .select()
         .single();
@@ -191,8 +190,11 @@ const EditGPT = () => {
 
       toast({
         title: "Success!",
-        description: "PDF uploaded successfully. Processing will begin shortly.",
+        description: "PDF uploaded successfully. Processing started...",
       });
+
+      // Trigger PDF processing in background
+      processePDFInBackground(kbRow.id, id, filePath, file.name);
 
       fetchKnowledgeFiles();
       
@@ -206,6 +208,46 @@ const EditGPT = () => {
       });
     } finally {
       setUploading(false);
+    }
+  };
+
+  const processePDFInBackground = async (knowledgeBaseId: string, customGptId: string, filePath: string, fileName: string) => {
+    try {
+      console.log('Starting PDF processing...');
+      const { data, error } = await supabase.functions.invoke('process-pdf', {
+        body: {
+          knowledgeBaseId,
+          customGptId,
+          filePath,
+          fileName,
+        },
+      });
+
+      if (error) {
+        console.error('PDF processing error:', error);
+        toast({
+          title: "Processing Error",
+          description: "Failed to process PDF content. File uploaded but may not be searchable.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log('PDF processing completed:', data);
+      toast({
+        title: "Processing Complete!",
+        description: `PDF processed successfully. ${data.chunksProcessed} text chunks extracted.`,
+      });
+
+      // Refresh the file list to show updated status
+      fetchKnowledgeFiles();
+    } catch (error: any) {
+      console.error('Background processing error:', error);
+      toast({
+        title: "Processing Error",
+        description: "Failed to process PDF in background.",
+        variant: "destructive",
+      });
     }
   };
 

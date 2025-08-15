@@ -21,6 +21,7 @@ interface KnowledgeFile {
   id: string;
   file_name: string;
   file_size: number;
+  upload_path: string | null;
   created_at: string;
   processed_at: string | null;
 }

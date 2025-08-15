@@ -245,7 +245,7 @@ const Chat = () => {
         throw new Error(response.error.message || 'Failed to generate response');
       }
 
-      const { content: assistantResponse, retrievedChunks } = response.data;
+      const { content: assistantResponse, retrievedChunks = [] } = response.data;
 
       // Save assistant response to database
       const { error: assistantError } = await supabase

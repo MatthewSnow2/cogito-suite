@@ -317,62 +317,80 @@ function cleanAndValidateText(text: string): string {
 
 // Create meaningful text chunks for better semantic search
 function createMeaningfulChunks(text: string): string[] {
-  const chunks: string[] = [];
-  
-  // Split by paragraphs first
-  const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 20);
-  
-  let currentChunk = '';
-  const maxChunkSize = 1000;
-  const minChunkSize = 200;
-  
-  for (const paragraph of paragraphs) {
-    const trimmedParagraph = paragraph.trim();
-    
-    // If adding this paragraph would make chunk too large
-    if (currentChunk.length + trimmedParagraph.length > maxChunkSize && currentChunk.length > minChunkSize) {
-      chunks.push(currentChunk.trim());
-      currentChunk = trimmedParagraph;
-    } else {
-      currentChunk += (currentChunk ? '\n\n' : '') + trimmedParagraph;
+  const MAX_CHARS = 1800; // ultra-safe per-chunk cap well below token limits
+  const MIN_CHARS = 200;
+
+  // Helper: split an overlong string by words into <= MAX_CHARS pieces
+  const splitByWords = (s: string): string[] => {
+    const parts: string[] = [];
+    let start = 0;
+    while (start < s.length) {
+      const end = Math.min(start + MAX_CHARS, s.length);
+      // try to break at a space near the end
+      let cut = end;
+      if (end < s.length) {
+        const lastSpace = s.lastIndexOf(' ', end - 1);
+        if (lastSpace > start + Math.floor(MAX_CHARS * 0.6)) cut = lastSpace;
+      }
+      parts.push(s.slice(start, cut).trim());
+      start = cut;
+      // avoid infinite loop on no-space long tokens
+      if (cut === end && start < s.length) start++;
     }
-  }
-  
-  // Add the last chunk
-  if (currentChunk.trim()) {
-    chunks.push(currentChunk.trim());
-  }
-  
-  // If no meaningful paragraphs, split by sentences
-  if (chunks.length === 0) {
-    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
-    currentChunk = '';
-    
-    for (const sentence of sentences) {
-      const trimmedSentence = sentence.trim();
-      
-      if (currentChunk.length + trimmedSentence.length > maxChunkSize && currentChunk.length > minChunkSize) {
-        chunks.push(currentChunk.trim());
-        currentChunk = trimmedSentence;
+    return parts.filter(p => p.length > 0);
+  };
+
+  const chunks: string[] = [];
+
+  // First try paragraphs
+  const paragraphs = text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  if (paragraphs.length > 0) {
+    let current = '';
+    for (const p of paragraphs) {
+      if (p.length > MAX_CHARS) {
+        // flush current before splitting huge paragraph
+        if (current.length >= MIN_CHARS) {
+          chunks.push(current.trim());
+          current = '';
+        }
+        chunks.push(...splitByWords(p));
+        continue;
+      }
+      if ((current + (current ? '\n\n' : '') + p).length > MAX_CHARS) {
+        if (current) chunks.push(current.trim());
+        current = p;
       } else {
-        currentChunk += (currentChunk ? '. ' : '') + trimmedSentence;
+        current += (current ? '\n\n' : '') + p;
       }
     }
-    
-    if (currentChunk.trim()) {
-      chunks.push(currentChunk.trim());
-    }
+    if (current.trim()) chunks.push(current.trim());
   }
-  
-  // Ensure we have at least one chunk
+
+  // If we still have no chunks, fall back to sentences
   if (chunks.length === 0) {
-    chunks.push(text.substring(0, maxChunkSize));
+    const sentences = text.split(/[.!?]+/).map(s => s.trim()).filter(Boolean);
+    let current = '';
+    for (const s of sentences) {
+      const sentence = s.length > MAX_CHARS ? splitByWords(s) : [s];
+      for (const piece of sentence) {
+        if ((current + (current ? '. ' : '') + piece).length > MAX_CHARS) {
+          if (current) chunks.push(current.trim());
+          current = piece;
+        } else {
+          current += (current ? '. ' : '') + piece;
+        }
+      }
+    }
+    if (current.trim()) chunks.push(current.trim());
   }
-  
-  // Filter out chunks that are too short or contain mostly non-text
-  return chunks.filter(chunk => {
-    const cleanChunk = chunk.replace(/[^a-zA-Z0-9\s]/g, '');
-    return cleanChunk.length > 30 && /[a-zA-Z]/.test(chunk);
+
+  // Absolute safety: clamp any residual oversize
+  const safe = chunks.flatMap(c => (c.length > MAX_CHARS ? splitByWords(c) : [c]));
+
+  // Filter low-signal chunks
+  return safe.filter(chunk => {
+    const clean = chunk.replace(/[^a-zA-Z0-9\s]/g, '');
+    return clean.length > 30 && /[a-zA-Z]/.test(chunk);
   });
 }
 
@@ -381,9 +399,11 @@ async function generateEmbeddings(chunks: string[]): Promise<number[][]> {
   const embeddings: number[][] = [];
   
   // Process chunks in batches to avoid rate limits
-  const batchSize = 5;
+  const batchSize = 3;
+  const SAFE_MAX = 1800; // hard cap per input string
   for (let i = 0; i < chunks.length; i += batchSize) {
-    const batch = chunks.slice(i, i + batchSize);
+    const batchRaw = chunks.slice(i, i + batchSize);
+    const batch = batchRaw.map((c) => (c.length > SAFE_MAX ? c.slice(0, SAFE_MAX) : c));
     
     const response = await fetch('https://api.openai.com/v1/embeddings', {
       method: 'POST',

@@ -290,25 +290,58 @@ function cleanAndValidateText(text: string): string {
     throw new Error('No text could be extracted from the PDF');
   }
   
-  // Clean the text
+  // Initial normalization
   let cleaned = text
     // Remove null bytes and control characters
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
     // Remove invalid Unicode
-    .replace(/\uFFFD/g, '')
-    // Normalize whitespace
+    .replace(/\uFFFD/g, ' ')
+    .replace(/\r/g, '\n');
+
+  // Strip PDF structure blocks and artifacts
+  cleaned = cleaned
+    // Remove complete obj...endobj blocks
+    .replace(/(\d+\s+\d+\s+obj[\s\S]*?endobj)/g, ' ')
+    // Remove common PDF keyword lines
+    .replace(/(?m)^\s*(Filter|FlateDecode|DCTDecode|ASCII85Decode|LZWDecode|Length1?|Subtype|Type|Catalog|Pages|Kids|Count|MediaBox|Resources|Font|ProcSet|Encrypt|Root|Info|startxref|trailer|xref|endstream|stream|obj|endobj)\b.*$/g, ' ')
+    // Remove graphics/text operators
+    .replace(/\b(BT|ET|Tf|Do|Td|Tm|Tj|TJ|RG|rg|re|m|l|h|S|f|cs|CS|cm|q|Q)\b/g, ' ')
+    // Remove long hex strings
+    .replace(/<([0-9A-Fa-f]{16,})>/g, ' ')
+    // Remove very long words (likely binary/glyphs)
+    .replace(/\b\S{40,}\b/g, ' ')
+    // Remove lines that are mostly numbers/width arrays
+    .replace(/(?m)^(?:\s*\d+(?:\.\d+)?\s+){6,}\d+(?:\.\d+)?\s*$/g, ' ')
+    // Remove repeated tiny tokens
+    .replace(/(?:\b\w\b\s*){8,}/g, ' ');
+
+  // Collapse whitespace and deduplicate artifacts
+  cleaned = cleaned
+    .replace(/[^\S\r\n]+/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
     .replace(/\s+/g, ' ')
-    // Remove repeated characters (likely extraction artifacts)
-    .replace(/(.)\1{10,}/g, '$1')
     .trim();
-  
-  // Add contextual information for financial statements
+
+  // Final signal checks
+  const letters = (cleaned.match(/[A-Za-z]/g) || []).length;
+  const vowels = (cleaned.match(/[aeiouAEIOU]/g) || []).length;
+  const digits = (cleaned.match(/\d/g) || []).length;
+  const length = cleaned.length;
+
+  const alphaRatio = letters / (length || 1);
+  const vowelRatio = vowels / (letters || 1);
+  const numericRatio = digits / (length || 1);
+
+  if (alphaRatio < 0.45 || vowelRatio < 0.18 || numericRatio > 0.45) {
+    throw new Error('Insufficient readable text extracted from PDF');
+  }
+
+  // Add minimal context if still short
   if (cleaned.length < 200) {
-    cleaned = `MBNA Financial Statement Document. ${cleaned}`.trim();
+    cleaned = `Business Class Upgrade Document. ${cleaned}`.trim();
   }
   
-  // Ensure we have meaningful content
-  if (cleaned.length < 50) {
+  if (cleaned.length < 60) {
     throw new Error('Insufficient readable text extracted from PDF');
   }
   
@@ -390,7 +423,13 @@ function createMeaningfulChunks(text: string): string[] {
   // Filter low-signal chunks
   return safe.filter(chunk => {
     const clean = chunk.replace(/[^a-zA-Z0-9\s]/g, '');
-    return clean.length > 30 && /[a-zA-Z]/.test(chunk);
+    const alphaChars = clean.replace(/\s/g, '').replace(/[^A-Za-z]/g, '').length;
+    const totalChars = clean.replace(/\s/g, '').length || 1;
+    const alphaRatio = alphaChars / totalChars;
+    const vowelRatio = ((chunk.match(/[aeiouAEIOU]/g) || []).length) / ((chunk.match(/[A-Za-z]/g) || []).length || 1);
+    const numericRatio = ((chunk.match(/\d/g) || []).length) / (chunk.length || 1);
+    const hasSentence = /[.!?]\s/.test(chunk) || /\n/.test(chunk);
+    return clean.length > 60 && alphaRatio >= 0.5 && vowelRatio >= 0.2 && numericRatio < 0.4 && /[a-zA-Z]/.test(chunk) && hasSentence;
   });
 }
 

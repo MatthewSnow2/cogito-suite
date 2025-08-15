@@ -81,9 +81,7 @@ const Chat = () => {
     }
   }, [selectedConversation]);
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  // Auto-scroll is controlled manually after sending/receiving messages to allow reviewing history.
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -201,6 +199,7 @@ const Chat = () => {
         created_at: new Date().toISOString(),
       };
       setMessages(prev => [...prev, tempUserMessage]);
+      scrollToBottom();
 
       // Save user message to database
       const { error: userError } = await supabase
@@ -266,6 +265,7 @@ const Chat = () => {
             : m
         )
       );
+      scrollToBottom();
 
     } catch (error: any) {
       toast({

@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { Send, Bot, User, Plus, MessageSquare } from 'lucide-react';
+import { Send, Bot, User, Plus, MessageSquare, ChevronDown } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Select,
   SelectContent,
@@ -21,6 +22,10 @@ interface Message {
   role: 'user' | 'assistant' | 'system';
   content: string;
   created_at: string;
+  retrievedChunks?: Array<{
+    content: string;
+    similarity: string;
+  }>;
 }
 
 interface Conversation {
@@ -240,7 +245,7 @@ const Chat = () => {
         throw new Error(response.error.message || 'Failed to generate response');
       }
 
-      const { content: assistantResponse } = response.data;
+      const { content: assistantResponse, retrievedChunks } = response.data;
 
       // Save assistant response to database
       const { error: assistantError } = await supabase
@@ -257,7 +262,7 @@ const Chat = () => {
       setMessages(prev => 
         prev.map(m => 
           m.id === 'thinking' 
-            ? { ...m, content: assistantResponse, id: 'assistant-response' }
+            ? { ...m, content: assistantResponse, id: 'assistant-response', retrievedChunks }
             : m
         )
       );
@@ -377,6 +382,31 @@ const Chat = () => {
                       }`}
                     >
                       <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                      
+                      {/* Retrieved chunks dropdown */}
+                      {message.role === 'assistant' && message.retrievedChunks && message.retrievedChunks.length > 0 && (
+                        <Collapsible className="mt-3">
+                          <CollapsibleTrigger asChild>
+                            <Button variant="ghost" size="sm" className="text-xs p-1 h-auto">
+                              <ChevronDown className="h-3 w-3 mr-1" />
+                              View {message.retrievedChunks.length} retrieved vector{message.retrievedChunks.length > 1 ? 's' : ''}
+                            </Button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="mt-2">
+                            <div className="space-y-2 border-t border-border/50 pt-2">
+                              {message.retrievedChunks.map((chunk, chunkIndex) => (
+                                <div key={chunkIndex} className="p-2 bg-muted/30 rounded text-xs">
+                                  <div className="flex justify-between items-center mb-1">
+                                    <span className="text-muted-foreground font-medium">Chunk {chunkIndex + 1}</span>
+                                    <span className="text-primary font-medium">{chunk.similarity}% match</span>
+                                  </div>
+                                  <p className="text-foreground/80 leading-relaxed">{chunk.content}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
+                      )}
                     </div>
 
                     {message.role === 'user' && (

@@ -49,7 +49,7 @@ serve(async (req) => {
     console.log('Is knowledge query:', isKnowledgeQuery);
 
     // Search for relevant knowledge base content
-    const relevantContent = await searchKnowledgeBase(queryEmbedding, customGptId, isKnowledgeQuery);
+    const { relevantContent, searchResults } = await searchKnowledgeBase(queryEmbedding, customGptId, isKnowledgeQuery);
     console.log('Found relevant content chunks:', relevantContent.length);
 
     // Build system message with instructions and context
@@ -136,7 +136,11 @@ serve(async (req) => {
     return new Response(JSON.stringify({ 
       content: assistantMessage,
       success: true,
-      usedKnowledgeBase: relevantContent.length > 0
+      usedKnowledgeBase: relevantContent.length > 0,
+      retrievedChunks: searchResults.map((chunk: any) => ({
+        content: chunk.content,
+        similarity: (chunk.similarity * 100).toFixed(1)
+      }))
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
@@ -176,7 +180,7 @@ async function generateQueryEmbedding(text: string): Promise<number[]> {
 }
 
 // Search knowledge base for relevant content
-async function searchKnowledgeBase(queryEmbedding: number[], customGptId: string, isKnowledgeQuery: boolean = false): Promise<string[]> {
+async function searchKnowledgeBase(queryEmbedding: number[], customGptId: string, isKnowledgeQuery: boolean = false): Promise<{relevantContent: string[], searchResults: any[]}> {
   try {
     // Use more aggressive search when user explicitly asks about knowledge
     const threshold = isKnowledgeQuery ? 0.1 : 0.3;
@@ -193,15 +197,15 @@ async function searchKnowledgeBase(queryEmbedding: number[], customGptId: string
 
     if (error) {
       console.error('Knowledge base search error:', error);
-      return [];
+      return { relevantContent: [], searchResults: [] };
     }
 
-    const results = data?.map((chunk: any) => `[Similarity: ${(chunk.similarity * 100).toFixed(1)}%] ${chunk.content}`) || [];
-    console.log(`Knowledge search returned ${results.length} chunks`);
+    const relevantContent = data?.map((chunk: any) => `[Similarity: ${(chunk.similarity * 100).toFixed(1)}%] ${chunk.content}`) || [];
+    console.log(`Knowledge search returned ${relevantContent.length} chunks`);
     
-    return results;
+    return { relevantContent, searchResults: data || [] };
   } catch (error) {
     console.error('Error searching knowledge base:', error);
-    return [];
+    return { relevantContent: [], searchResults: [] };
   }
 }

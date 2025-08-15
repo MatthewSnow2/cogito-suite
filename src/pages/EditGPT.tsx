@@ -179,6 +179,7 @@ const EditGPT = () => {
           file_name: file.name,
           file_size: file.size,
           upload_path: filePath,
+          processed_at: new Date().toISOString(),
         })
         .select()
         .single();

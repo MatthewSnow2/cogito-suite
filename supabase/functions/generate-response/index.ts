@@ -78,10 +78,9 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4.1-mini-2025-04-14',
+        model: 'gpt-5-2025-08-07',
         messages: messages,
         max_completion_tokens: 2000,
-        temperature: 0.7,
       }),
     });
 
@@ -144,8 +143,8 @@ async function searchKnowledgeBase(queryEmbedding: number[], customGptId: string
     const { data, error } = await supabase.rpc('match_documents', {
       query_embedding: queryEmbedding,
       custom_gpt_id: customGptId,
-      match_threshold: 0.7,
-      match_count: 3
+      match_threshold: 0.3,
+      match_count: 5
     });
 
     if (error) {

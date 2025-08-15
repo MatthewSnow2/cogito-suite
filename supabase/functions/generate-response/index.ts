@@ -54,6 +54,18 @@ serve(async (req) => {
     if (relevantContent.length > 0) {
       systemMessage += `\n\nRelevant information from your knowledge base:\n${relevantContent.join('\n\n')}`;
       console.log('Added knowledge base context to system message');
+    } else {
+      const { data: kbFiles } = await supabase
+        .from('knowledge_base')
+        .select('file_name')
+        .eq('custom_gpt_id', customGptId)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (kbFiles && kbFiles.length > 0) {
+        const fileList = kbFiles.map((f: any) => f.file_name).join(', ');
+        systemMessage += `\n\nNote: Uploaded documents available: ${fileList}. If the user's question refers to these files, acknowledge their presence. Do not invent figures. If detailed analysis is needed, ask for a text-based (non-scanned) PDF to enable extraction.`;
+        console.log('Added fallback file list to system message');
+      }
     }
 
     // Build messages for OpenAI

@@ -56,17 +56,17 @@ const Auth = () => {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: {
-          emailRedirectTo: redirectUrl
-        }
       });
 
       if (error) throw error;
 
-      toast({
-        title: "Account created!",
-        description: "Please check your email to confirm your account.",
-      });
+      if (data.user) {
+        toast({
+          title: "Welcome!",
+          description: "Your account has been created successfully.",
+        });
+        window.location.href = '/';
+      }
     } catch (error: any) {
       toast({
         title: "Error",

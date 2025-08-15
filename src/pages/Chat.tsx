@@ -212,40 +212,55 @@ const Chat = () => {
       const tempAssistantMessage: Message = {
         id: 'temp-assistant',
         role: 'assistant',
-        content: 'Thinking...',
+        content: '...',
         created_at: new Date().toISOString(),
       };
       setMessages(prev => [...prev.filter(m => m.id !== 'temp-user'), tempUserMessage, tempAssistantMessage]);
 
-      // TODO: Call GPT API here
-      // For now, simulate a response
-      setTimeout(async () => {
-        const assistantResponse = `This is a simulated response to: "${userMessage}". The actual GPT integration will be implemented in the next phase.`;
-        
-        try {
-          const { error: assistantError } = await supabase
-            .from('messages')
-            .insert({
-              conversation_id: selectedConversation,
-              role: 'assistant',
-              content: assistantResponse,
-            });
+      // Get GPT instructions
+      const { data: gptData, error: gptError } = await supabase
+        .from('custom_gpts')
+        .select('instructions')
+        .eq('id', selectedGPT)
+        .single();
 
-          if (assistantError) throw assistantError;
+      if (gptError) throw gptError;
 
-          // Update the temporary message with real response
-          setMessages(prev => 
-            prev.map(m => 
-              m.id === 'temp-assistant' 
-                ? { ...m, content: assistantResponse }
-                : m
-            )
-          );
-        } catch (error: any) {
-          setMessages(prev => prev.filter(m => m.id !== 'temp-assistant'));
-          throw error;
-        }
-      }, 1000);
+      // Call the OpenAI edge function
+      const response = await supabase.functions.invoke('generate-response', {
+        body: {
+          message: userMessage,
+          conversationId: selectedConversation,
+          customGptId: selectedGPT,
+          gptInstructions: gptData.instructions,
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Failed to generate response');
+      }
+
+      const { content: assistantResponse } = response.data;
+
+      // Save assistant response to database
+      const { error: assistantError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: selectedConversation,
+          role: 'assistant',
+          content: assistantResponse,
+        });
+
+      if (assistantError) throw assistantError;
+
+      // Update the temporary message with real response
+      setMessages(prev => 
+        prev.map(m => 
+          m.id === 'temp-assistant' 
+            ? { ...m, content: assistantResponse }
+            : m
+        )
+      );
 
     } catch (error: any) {
       toast({

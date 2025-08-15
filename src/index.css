@@ -6,128 +6,129 @@
 
 @layer base {
   :root {
-    /* Modern AI Platform Color Palette */
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
+    /* Modern Professional Dark Theme */
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
 
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
 
-    /* Premium Blue-Purple Gradient Primary */
-    --primary: 263 100% 63%;
-    --primary-foreground: 0 0% 98%;
-    --primary-glow: 263 85% 78%;
-    --primary-dark: 263 100% 45%;
+    /* Beautiful Blue-Purple Primary Palette */
+    --primary: 258 90% 66%;
+    --primary-foreground: 210 40% 98%;
+    --primary-glow: 260 100% 80%;
+    --primary-dark: 258 90% 55%;
 
-    /* Sophisticated Secondary */
-    --secondary: 240 5% 15%;
-    --secondary-foreground: 0 0% 98%;
+    /* Professional Secondary */
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
 
-    /* Muted Professional Tones */
-    --muted: 240 6% 10%;
-    --muted-foreground: 240 5% 65%;
+    /* Refined Muted Tones */
+    --muted: 215 28% 17%;
+    --muted-foreground: 217 11% 65%;
 
-    /* Elegant Accent */
-    --accent: 263 70% 55%;
-    --accent-foreground: 0 0% 98%;
+    /* Vibrant Accent */
+    --accent: 258 90% 66%;
+    --accent-foreground: 210 40% 98%;
 
     /* Destructive */
     --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive-foreground: 210 40% 98%;
 
-    /* Border and Input */
-    --border: 240 6% 20%;
-    --input: 240 6% 15%;
-    --ring: 263 100% 63%;
+    /* Clean Borders and Inputs */
+    --border: 217 33% 23%;
+    --input: 217 33% 17%;
+    --ring: 258 90% 66%;
 
     --radius: 0.75rem;
 
-    /* Chat Interface */
-    --chat-background: 240 8% 6%;
-    --chat-message-user: 263 100% 63%;
-    --chat-message-assistant: 240 6% 12%;
+    /* Chat Interface Colors */
+    --chat-background: 222 47% 8%;
+    --chat-message-user: 258 90% 66%;
+    --chat-message-assistant: 217 33% 20%;
 
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(263 100% 63%), hsl(263 85% 78%));
-    --gradient-secondary: linear-gradient(135deg, hsl(240 6% 10%), hsl(240 8% 15%));
-    --gradient-hero: linear-gradient(135deg, hsl(263 100% 63%) 0%, hsl(283 100% 68%) 50%, hsl(303 100% 73%) 100%);
+    /* Premium Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(258 90% 66%), hsl(260 100% 80%));
+    --gradient-secondary: linear-gradient(135deg, hsl(217 33% 17%), hsl(217 33% 23%));
+    --gradient-hero: linear-gradient(135deg, hsl(258 90% 66%) 0%, hsl(270 90% 70%) 50%, hsl(282 90% 74%) 100%);
 
     /* Glass Effects */
-    --glass-background: hsla(240, 10%, 3.9%, 0.8);
-    --glass-border: hsla(263, 100%, 63%, 0.2);
+    --glass-background: hsla(222, 47%, 11%, 0.8);
+    --glass-border: hsla(258, 90%, 66%, 0.2);
 
-    /* Shadows */
-    --shadow-elegant: 0 10px 30px -10px hsla(263, 100%, 63%, 0.3);
-    --shadow-glow: 0 0 40px hsla(263, 85%, 78%, 0.4);
+    /* Elegant Shadows */
+    --shadow-elegant: 0 10px 30px -10px hsla(258, 90%, 66%, 0.3);
+    --shadow-glow: 0 0 40px hsla(260, 100%, 80%, 0.4);
     --shadow-card: 0 4px 6px -1px hsla(0, 0%, 0%, 0.1), 0 2px 4px -1px hsla(0, 0%, 0%, 0.06);
 
-    /* Animations */
+    /* Smooth Transitions */
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-bouncy: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
 
-    /* Sidebar */
-    --sidebar-background: 240 8% 6%;
-    --sidebar-foreground: 0 0% 98%;
-    --sidebar-primary: 263 100% 63%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 6% 12%;
-    --sidebar-accent-foreground: 0 0% 98%;
-    --sidebar-border: 240 6% 20%;
-    --sidebar-ring: 263 100% 63%;
+    /* Sidebar Colors */
+    --sidebar-background: 222 47% 8%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 258 90% 66%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 217 33% 20%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 217 33% 23%;
+    --sidebar-ring: 258 90% 66%;
   }
 
   .light {
+    /* Clean Light Theme */
     --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 263 100% 63%;
-    --primary-foreground: 0 0% 98%;
-    --primary-glow: 263 85% 78%;
-    --primary-dark: 263 100% 45%;
+    --primary: 258 90% 66%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 260 100% 80%;
+    --primary-dark: 258 90% 55%;
 
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 263 70% 55%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 258 90% 66%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 263 100% 63%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 258 90% 66%;
 
-    /* Chat Interface Light */
-    --chat-background: 240 5% 96%;
-    --chat-message-user: 263 100% 63%;
+    /* Light Chat Interface */
+    --chat-background: 210 40% 98%;
+    --chat-message-user: 258 90% 66%;
     --chat-message-assistant: 0 0% 100%;
 
-    /* Glass Effects Light */
+    /* Light Glass Effects */
     --glass-background: hsla(0, 0%, 100%, 0.8);
-    --glass-border: hsla(263, 100%, 63%, 0.15);
+    --glass-border: hsla(258, 90%, 66%, 0.15);
 
-    /* Sidebar Light */
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 263 100% 63%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 240 5.9% 90%;
-    --sidebar-ring: 263 100% 63%;
+    /* Light Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 258 90% 66%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 40% 96%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: 258 90% 66%;
   }
 }
 
@@ -137,6 +138,6 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
   }
 }

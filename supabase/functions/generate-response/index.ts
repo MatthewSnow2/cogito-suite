@@ -44,16 +44,37 @@ serve(async (req) => {
     const queryEmbedding = await generateQueryEmbedding(message);
     console.log('Generated query embedding');
 
+    // Check if user is explicitly asking about knowledge/documents
+    const isKnowledgeQuery = /\b(knowledge|document|file|statement|pdf|uploaded|reference)\b/i.test(message);
+    console.log('Is knowledge query:', isKnowledgeQuery);
+
     // Search for relevant knowledge base content
-    const relevantContent = await searchKnowledgeBase(queryEmbedding, customGptId);
+    const relevantContent = await searchKnowledgeBase(queryEmbedding, customGptId, isKnowledgeQuery);
     console.log('Found relevant content chunks:', relevantContent.length);
 
     // Build system message with instructions and context
     let systemMessage = gptInstructions;
     
+    // Always inform about knowledge search when user asks about knowledge/documents
+    if (isKnowledgeQuery) {
+      systemMessage += `\n\n🔍 KNOWLEDGE BASE SEARCH PERFORMED: I searched your uploaded documents for relevant information.`;
+    }
+    
     if (relevantContent.length > 0) {
       systemMessage += `\n\nRelevant information from your knowledge base:\n${relevantContent.join('\n\n')}`;
       console.log('Added knowledge base context to system message');
+    } else if (isKnowledgeQuery) {
+      const { data: kbFiles } = await supabase
+        .from('knowledge_base')
+        .select('file_name')
+        .eq('custom_gpt_id', customGptId)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (kbFiles && kbFiles.length > 0) {
+        const fileList = kbFiles.map((f: any) => f.file_name).join(', ');
+        systemMessage += `\n\n⚠️ NO RELEVANT CONTENT FOUND: I searched your uploaded documents (${fileList}) but couldn't find text that matches your query. This may be because: 1) The PDF is scanned/image-based rather than text-searchable, 2) The content doesn't closely match your question, or 3) The document needs to be re-uploaded as a text-based PDF.`;
+        console.log('Added explicit no-match message for knowledge query');
+      }
     } else {
       const { data: kbFiles } = await supabase
         .from('knowledge_base')
@@ -63,7 +84,7 @@ serve(async (req) => {
         .limit(5);
       if (kbFiles && kbFiles.length > 0) {
         const fileList = kbFiles.map((f: any) => f.file_name).join(', ');
-        systemMessage += `\n\nNote: Uploaded documents available: ${fileList}. If the user's question refers to these files, acknowledge their presence. Do not invent figures. If detailed analysis is needed, ask for a text-based (non-scanned) PDF to enable extraction.`;
+        systemMessage += `\n\nNote: Uploaded documents available: ${fileList}. If the user's question refers to these files, acknowledge their presence and offer to search them.`;
         console.log('Added fallback file list to system message');
       }
     }
@@ -150,13 +171,19 @@ async function generateQueryEmbedding(text: string): Promise<number[]> {
 }
 
 // Search knowledge base for relevant content
-async function searchKnowledgeBase(queryEmbedding: number[], customGptId: string): Promise<string[]> {
+async function searchKnowledgeBase(queryEmbedding: number[], customGptId: string, isKnowledgeQuery: boolean = false): Promise<string[]> {
   try {
+    // Use more aggressive search when user explicitly asks about knowledge
+    const threshold = isKnowledgeQuery ? 0.1 : 0.3;
+    const count = isKnowledgeQuery ? 8 : 5;
+    
+    console.log(`Searching with threshold: ${threshold}, count: ${count}`);
+    
     const { data, error } = await supabase.rpc('match_documents', {
       query_embedding: queryEmbedding,
       custom_gpt_id: customGptId,
-      match_threshold: 0.3,
-      match_count: 5
+      match_threshold: threshold,
+      match_count: count
     });
 
     if (error) {
@@ -164,7 +191,10 @@ async function searchKnowledgeBase(queryEmbedding: number[], customGptId: string
       return [];
     }
 
-    return data?.map((chunk: any) => chunk.content) || [];
+    const results = data?.map((chunk: any) => `[Similarity: ${(chunk.similarity * 100).toFixed(1)}%] ${chunk.content}`) || [];
+    console.log(`Knowledge search returned ${results.length} chunks`);
+    
+    return results;
   } catch (error) {
     console.error('Error searching knowledge base:', error);
     return [];

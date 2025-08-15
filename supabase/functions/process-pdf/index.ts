@@ -56,12 +56,15 @@ serve(async (req) => {
 
     // Store chunks and embeddings in database
     const insertPromises = chunks.map(async (chunk, index) => {
+      // Clean each chunk before storing
+      const cleanedChunk = cleanTextForDatabase(chunk);
+      
       const { error } = await supabase
         .from('document_chunks')
         .insert({
           knowledge_base_id: knowledgeBaseId,
           custom_gpt_id: customGptId,
-          content: chunk,
+          content: cleanedChunk,
           chunk_index: index,
           embedding: embeddings[index],
         });
@@ -136,6 +139,9 @@ async function extractTextFromPDF(file: Blob): Promise<string> {
       }
     }
     
+    // Clean the text to remove null bytes and other problematic characters
+    text = cleanTextForDatabase(text);
+    
     // Fallback: if no text extracted, return filename as content
     if (!text.trim()) {
       text = `This document contains content that cannot be automatically extracted. Document name: ${file.name || 'PDF Document'}`;
@@ -146,6 +152,19 @@ async function extractTextFromPDF(file: Blob): Promise<string> {
     console.error('Error extracting text from PDF:', error);
     return `Error processing PDF content. Document may be encrypted or in an unsupported format.`;
   }
+}
+
+// Clean text to remove problematic characters that can't be stored in PostgreSQL
+function cleanTextForDatabase(text: string): string {
+  return text
+    // Remove null bytes and other control characters
+    .replace(/\0/g, '')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    // Remove invalid Unicode sequences
+    .replace(/\uFFFD/g, '')
+    // Normalize whitespace
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 // Split text into overlapping chunks

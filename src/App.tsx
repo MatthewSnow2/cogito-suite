@@ -8,6 +8,7 @@ import Layout from "@/components/Layout";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import CreateGPT from "./pages/CreateGPT";
+import EditGPT from "./pages/EditGPT";
 import Chat from "./pages/Chat";
 import NotFound from "./pages/NotFound";
 
@@ -76,6 +77,11 @@ const App = () => (
             <Route path="/create" element={
               <ProtectedRoute>
                 <CreateGPT />
+              </ProtectedRoute>
+            } />
+            <Route path="/edit/:id" element={
+              <ProtectedRoute>
+                <EditGPT />
               </ProtectedRoute>
             } />
             <Route path="/chat" element={

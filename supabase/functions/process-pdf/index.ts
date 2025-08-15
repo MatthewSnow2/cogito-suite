@@ -337,7 +337,7 @@ function cleanAndValidateText(text: string): string {
     // Remove complete obj...endobj blocks
     .replace(/(\d+\s+\d+\s+obj[\s\S]*?endobj)/g, ' ')
     // Remove common PDF keyword lines
-    .replace(/(?m)^\s*(Filter|FlateDecode|DCTDecode|ASCII85Decode|LZWDecode|Length1?|Subtype|Type|Catalog|Pages|Kids|Count|MediaBox|Resources|Font|ProcSet|Encrypt|Root|Info|startxref|trailer|xref|endstream|stream|obj|endobj)\b.*$/g, ' ')
+    .replace(/^\s*(Filter|FlateDecode|DCTDecode|ASCII85Decode|LZWDecode|Length1?|Subtype|Type|Catalog|Pages|Kids|Count|MediaBox|Resources|Font|ProcSet|Encrypt|Root|Info|startxref|trailer|xref|endstream|stream|obj|endobj)\b.*$/gm, ' ')
     // Remove graphics/text operators
     .replace(/\b(BT|ET|Tf|Do|Td|Tm|Tj|TJ|RG|rg|re|m|l|h|S|f|cs|CS|cm|q|Q)\b/g, ' ')
     // Remove long hex strings

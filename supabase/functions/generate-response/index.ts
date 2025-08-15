@@ -66,14 +66,19 @@ serve(async (req) => {
     } else if (isKnowledgeQuery) {
       const { data: kbFiles } = await supabase
         .from('knowledge_base')
-        .select('file_name')
+        .select('file_name, created_at, file_size, processed_at')
         .eq('custom_gpt_id', customGptId)
         .order('created_at', { ascending: false })
         .limit(5);
       if (kbFiles && kbFiles.length > 0) {
-        const fileList = kbFiles.map((f: any) => f.file_name).join(', ');
-        systemMessage += `\n\n⚠️ NO RELEVANT CONTENT FOUND: I searched your uploaded documents (${fileList}) but couldn't find text that matches your query. This may be because: 1) The PDF is scanned/image-based rather than text-searchable, 2) The content doesn't closely match your question, or 3) The document needs to be re-uploaded as a text-based PDF.`;
-        console.log('Added explicit no-match message for knowledge query');
+        const fileDetails = kbFiles.map((f: any) => {
+          const uploadDate = new Date(f.created_at).toLocaleDateString();
+          const fileSize = f.file_size ? `${(f.file_size / 1024).toFixed(1)}KB` : 'Unknown size';
+          const status = f.processed_at ? 'Processed' : 'Processing';
+          return `• ${f.file_name} (${fileSize}, uploaded ${uploadDate}, ${status})`;
+        }).join('\n');
+        systemMessage += `\n\n⚠️ NO RELEVANT CONTENT FOUND: I searched your uploaded documents but couldn't find text that matches your query.\n\nYour uploaded files:\n${fileDetails}\n\nThis may be because: 1) The PDF is scanned/image-based rather than text-searchable, 2) The content doesn't closely match your question, or 3) The document needs to be re-uploaded as a text-based PDF.`;
+        console.log('Added detailed file information for knowledge query');
       }
     } else {
       const { data: kbFiles } = await supabase

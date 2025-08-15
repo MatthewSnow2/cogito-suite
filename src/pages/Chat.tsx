@@ -208,14 +208,14 @@ const Chat = () => {
 
       if (userError) throw userError;
 
-      // Add assistant message placeholder
-      const tempAssistantMessage: Message = {
-        id: 'temp-assistant',
+      // Add thinking indicator
+      const thinkingMessage: Message = {
+        id: 'thinking',
         role: 'assistant',
-        content: '...',
+        content: '🤔 Thinking...',
         created_at: new Date().toISOString(),
       };
-      setMessages(prev => [...prev.filter(m => m.id !== 'temp-user'), tempUserMessage, tempAssistantMessage]);
+      setMessages(prev => [...prev.filter(m => m.id !== 'temp-user'), tempUserMessage, thinkingMessage]);
 
       // Get GPT instructions
       const { data: gptData, error: gptError } = await supabase
@@ -253,11 +253,11 @@ const Chat = () => {
 
       if (assistantError) throw assistantError;
 
-      // Update the temporary message with real response
+      // Update the thinking message with real response
       setMessages(prev => 
         prev.map(m => 
-          m.id === 'temp-assistant' 
-            ? { ...m, content: assistantResponse }
+          m.id === 'thinking' 
+            ? { ...m, content: assistantResponse, id: 'assistant-response' }
             : m
         )
       );
@@ -268,7 +268,7 @@ const Chat = () => {
         description: "Failed to send message",
         variant: "destructive",
       });
-      setMessages(prev => prev.filter(m => !m.id.startsWith('temp-')));
+      setMessages(prev => prev.filter(m => !m.id.startsWith('temp-') && m.id !== 'thinking'));
     } finally {
       setLoading(false);
     }

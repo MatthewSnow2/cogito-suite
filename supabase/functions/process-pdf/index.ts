@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.55.0';
+import { inflate, inflateRaw } from 'https://esm.sh/pako@2.1.0';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -146,41 +147,86 @@ async function extractCleanTextFromPDF(file: Blob): Promise<string> {
   }
 }
 
-// Extract uncompressed text from PDF streams
+// Extract text from PDF by parsing BT/ET and also decompressing Flate streams
 function extractUncompressedText(data: Uint8Array): string {
   let text = '';
-  const decoder = new TextDecoder('utf-8', { fatal: false });
+  const decoder = new TextDecoder('latin1', { fatal: false });
   const content = decoder.decode(data);
-  
-  // Look for text between BT (Begin Text) and ET (End Text) operators
-  const textBlockRegex = /BT\s*(.*?)\s*ET/gs;
-  let match;
-  
-  while ((match = textBlockRegex.exec(content)) !== null) {
-    const textBlock = match[1];
-    
-    // Extract text from Tj and TJ operators
-    const tjRegex = /\((.*?)\)\s*[Tt]j/g;
-    let tjMatch;
-    while ((tjMatch = tjRegex.exec(textBlock)) !== null) {
-      text += decodeTextString(tjMatch[1]) + ' ';
-    }
-    
-    // Extract text from show text operators
-    const showTextRegex = /\[(.*?)\]\s*TJ/g;
-    let showMatch;
-    while ((showMatch = showTextRegex.exec(textBlock)) !== null) {
-      const textArray = showMatch[1];
-      // Process text array elements
-      const stringRegex = /\((.*?)\)/g;
-      let stringMatch;
-      while ((stringMatch = stringRegex.exec(textArray)) !== null) {
-        text += decodeTextString(stringMatch[1]) + ' ';
+
+  // Helper to parse text showing operators from a string block
+  const parseOperators = (src: string): string => {
+    let out = '';
+    const textBlockRegex = /BT\s*[\s\S]*?ET/gs;
+    let match;
+    while ((match = textBlockRegex.exec(src)) !== null) {
+      const textBlock = match[0];
+      // Tj
+      const tjRegex = /\((.*?)\)\s*[Tt]j/g;
+      let tjMatch;
+      while ((tjMatch = tjRegex.exec(textBlock)) !== null) {
+        out += decodeTextString(tjMatch[1]) + ' ';
+      }
+      // TJ array form
+      const showTextRegex = /\[(.*?)\]\s*TJ/g;
+      let showMatch;
+      while ((showMatch = showTextRegex.exec(textBlock)) !== null) {
+        const textArray = showMatch[1];
+        const stringRegex = /\((.*?)\)/g;
+        let stringMatch;
+        while ((stringMatch = stringRegex.exec(textArray)) !== null) {
+          out += decodeTextString(stringMatch[1]) + ' ';
+        }
       }
     }
+    return out;
+  };
+
+  // Strategy A: parse directly in uncompressed bytes
+  text += parseOperators(content);
+
+  // Strategy B: decompress Flate streams (skip images)
+  const objRegex = /(\d+\s+\d+\s+obj[\s\S]*?endobj)/g;
+  let objMatch;
+  while ((objMatch = objRegex.exec(content)) !== null) {
+    const obj = objMatch[1];
+    if (!/\/Filter\s*\/FlateDecode/.test(obj)) continue;
+    if (/\/Subtype\s*\/Image/.test(obj)) continue;
+
+    const streamIdx = obj.indexOf('stream');
+    const endStreamIdx = obj.indexOf('endstream', streamIdx);
+    if (streamIdx === -1 || endStreamIdx === -1) continue;
+
+    // Compute byte offsets using 1:1 latin1 mapping
+    let start = objMatch.index + streamIdx + 'stream'.length;
+    // Skip EOL after 'stream' if present
+    if (content[start] === '\r' && content[start + 1] === '\n') start += 2;
+    else if (content[start] === '\n') start += 1;
+    const end = objMatch.index + endStreamIdx;
+
+    const bytes = data.slice(start, end);
+    try {
+      let inflated: Uint8Array;
+      try {
+        inflated = inflate(bytes);
+      } catch (_) {
+        inflated = inflateRaw(bytes);
+      }
+      const decompressed = new TextDecoder('latin1').decode(inflated);
+      text += ' ' + parseOperators(decompressed);
+
+      // Fallback: also capture plain strings inside parentheses
+      const parenRegex = /\(([^)]{3,})\)/g;
+      let pm;
+      while ((pm = parenRegex.exec(decompressed)) !== null) {
+        const candidate = decodeTextString(pm[1]);
+        if (isReadableText(candidate)) text += candidate + ' ';
+      }
+    } catch (e) {
+      // ignore faulty streams
+    }
   }
-  
-  return text;
+
+  return text.trim();
 }
 
 // Extract text using pattern recognition

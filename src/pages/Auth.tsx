@@ -60,12 +60,20 @@ const Auth = () => {
 
       if (error) throw error;
 
-      if (data.user) {
+      // Check if email confirmation is required
+      if (data.user && data.session) {
+        // User created and logged in immediately (no email confirmation)
         toast({
           title: "Welcome!",
           description: "Your account has been created successfully.",
         });
         window.location.href = '/';
+      } else if (data.user && !data.session) {
+        // User created but needs email confirmation
+        toast({
+          title: "Check your email!",
+          description: "We've sent you a confirmation link. Please check your email to verify your account.",
+        });
       }
     } catch (error: any) {
       toast({

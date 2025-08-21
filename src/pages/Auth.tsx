@@ -88,6 +88,10 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
+      {/* Bidirectional Light Sweep Animation */}
+      <div className="page-scanner"></div>
+      <div className="page-scanner-trail"></div>
+      
       <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
         
         {/* Hero Section */}

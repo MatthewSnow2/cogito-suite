@@ -2,13 +2,24 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-// Temporarily hardcoding to bypass environment variable issues
-const SUPABASE_URL = "https://jmhfaqlxketpqrxvuejv.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImptaGZhcWx4a2V0cHFyeHZ1ZWp2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUyOTgwOTQsImV4cCI6MjA3MDg3NDA5NH0.joG1Ek-T-VjsoTqR_KrIhsJTOmJUg9HVOToEvwxfwGE";
+// Load credentials from environment variables
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Debug logging
-console.log('Supabase URL:', SUPABASE_URL);
-console.log('Supabase Key (first 20 chars):', SUPABASE_PUBLISHABLE_KEY.substring(0, 20));
+// Validate required environment variables
+if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
+  throw new Error(
+    'Missing Supabase environment variables. ' +
+    'Please copy .env.example to .env and configure your credentials. ' +
+    'See .env.example for setup instructions.'
+  );
+}
+
+// Only log in development (never expose credentials)
+if (import.meta.env.DEV) {
+  const projectId = SUPABASE_URL.split('.')[0].split('//')[1];
+  console.log('✓ Supabase configured for project:', projectId);
+}
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
